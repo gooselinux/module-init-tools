@@ -1,0 +1,74 @@
+diff -urNp module-init-tools-3.9_orig/depmod.c module-init-tools-3.9/depmod.c
+--- module-init-tools-3.9_orig/depmod.c	2009-05-27 14:33:08.000000000 -0400
++++ module-init-tools-3.9/depmod.c	2010-01-15 02:15:15.226846501 -0500
+@@ -1,6 +1,7 @@
+ /* New simplified depmod without backwards compat stuff and not
+    requiring ksyms.
+ 
++   (C) 2010 Jon Masters <jcm@jonmasters.org>, and others.
+    (C) 2002 Rusty Russell IBM Corporation
+  */
+ #define _GNU_SOURCE /* asprintf */
+@@ -1021,8 +1022,7 @@ static int parse_config_file(const char 
+ 			version = strsep_skipspace(&ptr, "\t ");
+ 			subdir = strsep_skipspace(&ptr, "\t ");
+ 
+-			if (strcmp(version, kernelversion) != 0 &&
+-			    strcmp(version, "*") != 0)
++			if (!regex_match(kernelversion, (const char *)version))
+ 				continue;
+ 
+ 			nofail_asprintf(&pathname, "%s%s%s/%s/%s.ko", basedir,
+diff -urNp module-init-tools-3.9_orig/util.c module-init-tools-3.9/util.c
+--- module-init-tools-3.9_orig/util.c	2009-05-27 14:33:11.000000000 -0400
++++ module-init-tools-3.9/util.c	2010-01-15 02:15:15.237845385 -0500
+@@ -4,6 +4,8 @@
+ #include <string.h>
+ #include <errno.h>
+ #include <elf.h>
++#include <sys/types.h>
++#include <regex.h>
+ #include "logging.h"
+ #include "util.h"
+ 
+@@ -203,3 +205,30 @@ int __attribute__ ((pure)) native_endian
+ 	return (char) *((uint32_t*)("\1\0\0\2"));
+ }
+ 
++/*
++ * Compare "string" with extended regex "pattern". Include backward compatible
++ * matching of "*" as a wildcard by replacing it with ".*" automatically.
++ */
++int regex_match(const char *string, const char *pattern)
++{
++	int status;
++	regex_t re;
++	char *fix_pattern;
++
++	/* backward compatibility with old "match" code */
++	if (strncmp("*", pattern, 1) != 0)
++		fix_pattern = (char *)pattern;
++	else
++		fix_pattern = ".*"; /* match everything */
++
++	if (regcomp(&re, fix_pattern, REG_EXTENDED|REG_NOSUB) != 0)
++		return 0;	/* alloc failure */
++
++	status = regexec(&re, string, (size_t) 0, NULL, 0);
++	regfree(&re);
++
++	if (status != 0)
++		return 0;	/* no match */
++
++	return 1;	/* match */
++}
+diff -urNp module-init-tools-3.9_orig/util.h module-init-tools-3.9/util.h
+--- module-init-tools-3.9_orig/util.h	2009-05-27 14:33:11.000000000 -0400
++++ module-init-tools-3.9/util.h	2010-01-15 02:15:15.237845385 -0500
+@@ -44,4 +44,6 @@ int native_endianness(void);
+ #define streq(a,b) (strcmp((a),(b)) == 0)
+ #define strstarts(a,start) (strncmp((a),(start), strlen(start)) == 0)
+ 
++int regex_match(const char *string, const char *pattern);
++
+ #endif

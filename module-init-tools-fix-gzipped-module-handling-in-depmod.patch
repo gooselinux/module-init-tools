@@ -1,0 +1,48 @@
+--- module-init-tools-3.9_orig/depmod.c	2010-07-23 14:57:16.055401030 -0400
++++ module-init-tools-3.9/depmod.c	2010-07-23 16:37:11.741277145 -0400
+@@ -502,6 +502,18 @@ static int is_higher_priority(const char
+ 	return prio_new > prio_old;
+ }
+ 
++/* Return newly allocated string without any possible .gz extension */
++static char *strip_gz_ext(const char *name)
++{
++	char *a;
++
++	if (ends_in(name, ".gz"))
++		a = NOFAIL(strndup(name, (strlen(name)-strlen(".gz"))));
++	else
++		a = NOFAIL(strdup(name));
++
++	return a;
++}
+ 
+ static struct module *do_module(const char *dirname,
+ 				       const char *filename,
+@@ -517,15 +529,19 @@ static struct module *do_module(const ch
+ 
+ 	/* Check if module is already in the list. */
+ 	for (i = &list; *i; i = &(*i)->next) {
++		char *old_name_strip = strip_gz_ext((*i)->basename);
++		char *old_path_strip = strip_gz_ext((*i)->pathname);
++		char *new_name_strip = strip_gz_ext(filename);
++		
++		if (streq(old_name_strip, new_name_strip)) {
++			char new_path_strip[strlen(dirname) + strlen("/")
++				      + strlen(new_name_strip) + 1];
+ 
+-		if (streq((*i)->basename, filename)) {
+-			char newpath[strlen(dirname) + strlen("/")
+-				      + strlen(filename) + 1];
+-
+-			sprintf(newpath, "%s/%s", dirname, filename);
++			sprintf(new_path_strip, "%s/%s", dirname,
++				new_name_strip);
+ 
+-			if (is_higher_priority(newpath, (*i)->pathname,search,
+-					       overrides)) {
++			if (is_higher_priority(new_path_strip, old_path_strip,
++					       search, overrides)) {
+ 				del_module(i, *i);
+ 				
+ 				new->next = *i;

@@ -1,0 +1,7 @@
+modprobe-dist-alsa.conf
+modprobe-dist-oss.conf
+depmod-dist.conf
+weak-modules
+modprobe-dist.conf
+module-init-tools-3.9.tar.bz2.sign
+module-init-tools-3.9.tar.bz2

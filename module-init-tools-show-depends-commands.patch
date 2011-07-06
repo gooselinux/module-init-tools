@@ -1,0 +1,49 @@
+diff -urNp module-init-tools-3.9_orig/modprobe.c module-init-tools-3.9/modprobe.c
+--- module-init-tools-3.9_orig/modprobe.c	2009-05-27 14:33:08.000000000 -0400
++++ module-init-tools-3.9/modprobe.c	2010-05-26 05:32:14.853043407 -0400
+@@ -658,10 +658,43 @@ static int insmod(struct list_head *list
+ 
+ 	command = find_command(mod->modname, commands);
+ 	if (command && !ignore_commands) {
+-		close_file(fd);
++
++		/*
++		 * RHEL-specific bits. Need to derive if show-depends set
++		 * until upstream fixed to use other than combo setting of
++		 * other existing flags. So obtain info from environment
++		 * instead of creating a new global just for RHEL use.
++		 */
++		char *arg, *argstring, *envdata;
++		int show_depends = 0;
++
++		envdata = getenv("MODPROBE_OPTIONS");
++		if (envdata) {
++			argstring = NOFAIL(strdup(envdata));
++			for (arg = strtok(argstring, " "); arg;
++			     arg = strtok(NULL, " ")) {
++				if (0 == strncmp("-D",arg,strlen("-D")))
++					show_depends = 1;
++			}
++			free(argstring);
++		}
++
++		/*
++		 * we will still need this file descriptor if showing deps
++		 * below, otherwise close it now to avoid leaking it.
++		 */
++		if (!show_depends)
++			close_file(fd);
++
+ 		do_command(mod->modname, command, dry_run, error,
+ 			   "install", cmdline_opts);
+-		goto out_optstring;
++		
++		/*
++		 * ordinarily we would finish, but if showing deps
++		 * we need to include the deps from *this* module.
++		 */
++		if (!show_depends)
++			goto out_optstring;
+ 	}
+ 
+ 	module = grab_elf_file_fd(mod->filename, fd);
